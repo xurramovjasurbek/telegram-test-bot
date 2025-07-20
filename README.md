@@ -1,21 +1,12 @@
+
 # Telegram Test Bot
 
-Bu bot testlarni yuborish va tekshirish uchun yaratilgan.
+Admin quyidagi komandalar orqali test qo‘shadi:
 
-## Ishga tushirish
+- `/addtest` — yangi test qo‘shish
+- `/listtests` — testlar ro‘yxatini ko‘rish
 
-1. `.env` fayl yarating va quyidagilarni kiriting:
+### .env faylga quyidagilarni yozing:
 ```
-TOKEN=your_bot_token_here
-ADMIN_ID=your_admin_id_here
+BOT_TOKEN=your_bot_token_here
 ```
-
-2. Railway orqali deploy qiling.
-
-## Fayllar
-
-- `bot.py` — Bot kodi
-- `requirements.txt` — Kutubxonalar
-- `Procfile` — Railway uchun ishga tushirish fayli
-- `.env.sample` — Namuna konfiguratsiya
-- `README.md` — Loyiha haqida

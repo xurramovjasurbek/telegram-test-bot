@@ -1,65 +1,60 @@
 
-import telebot
-from telebot.types import ReplyKeyboardMarkup, KeyboardButton
+from telegram import Update
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters, ConversationHandler
+from admin_tools import add_test, list_tests, remove_test
 import os
 
-API_TOKEN = "7606743572:AAE2AZxcHSn86P1s1Nt8haLYs1drbWK8sdM"
+BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = 564085453
 
-bot = telebot.TeleBot(API_TOKEN)
+TEST_NAME, TEST_ANSWERS = range(2)
+pending_tests = {}
 
-# Test kalitlarini saqlash
-test_answers = {}
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Assalomu alaykum!\n/test yoki /check orqali foydalanishingiz mumkin.")
 
-# Keyboard
-menu_markup = ReplyKeyboardMarkup(resize_keyboard=True)
-menu_markup.row(KeyboardButton("📄 Test ishlash"), KeyboardButton("✅ Testni tekshirish"))
+async def addtest_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID:
+        return await update.message.reply_text("Faqat admin qo‘shishi mumkin.")
+    await update.message.reply_text("Yangi test nomini kiriting:")
+    return TEST_NAME
 
-@bot.message_handler(commands=['start'])
-def send_welcome(message):
-    bot.send_message(message.chat.id, "Assalomu alaykum! Nimani xohlaysiz?", reply_markup=menu_markup)
+async def addtest_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    pending_tests[update.effective_user.id] = {"name": update.message.text}
+    await update.message.reply_text("Endi test javoblarini kiriting (masalan: ABCDBAD...):")
+    return TEST_ANSWERS
 
-@bot.message_handler(commands=['add_test'])
-def add_test(message):
-    if message.from_user.id != ADMIN_ID:
-        bot.reply_to(message, "Faqat admin yangi test qo‘shishi mumkin.")
+async def addtest_answers(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    test_info = pending_tests.get(update.effective_user.id, {})
+    name = test_info.get("name")
+    answers = update.message.text
+    add_test(name, answers)
+    await update.message.reply_text(f"✅ Test "{name}" muvaffaqiyatli qo‘shildi.")
+    return ConversationHandler.END
+
+async def list_all_tests(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID:
         return
+    tests = list_tests()
+    await update.message.reply_text("Testlar ro‘yxati:\n" + "\n".join(tests) if tests else "Hech qanday test yo‘q.")
 
-    try:
-        parts = message.text.split(maxsplit=2)
-        test_id = parts[1]
-        answers = parts[2].strip().upper()
-        test_answers[test_id] = answers
-        bot.reply_to(message, f"{test_id} test qo‘shildi. Kalit: {answers}")
-    except:
-        bot.reply_to(message, "❌ Format: /add_test test1 ABCDABCD...")
+async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    return ConversationHandler.END
 
-@bot.message_handler(func=lambda message: message.text == "📄 Test ishlash")
-def send_test_pdf(message):
-    # Hozircha PDF yo‘q – fayl bo‘lganida shundan yuboriladi
-    bot.send_message(message.chat.id, "Hozircha hech qanday test PDF mavjud emas.")
+if __name__ == "__main__":
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
+    
+    addtest_conv = ConversationHandler(
+        entry_points=[CommandHandler("addtest", addtest_start)],
+        states={
+            TEST_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, addtest_name)],
+            TEST_ANSWERS: [MessageHandler(filters.TEXT & ~filters.COMMAND, addtest_answers)],
+        },
+        fallbacks=[CommandHandler("cancel", cancel)]
+    )
 
-@bot.message_handler(func=lambda message: message.text == "✅ Testni tekshirish")
-def ask_for_answers(message):
-    bot.send_message(message.chat.id, "Test ID va javoblaringizni kiriting. (Masalan: test1 ABCDCABDA...)")
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(addtest_conv)
+    app.add_handler(CommandHandler("listtests", list_all_tests))
 
-@bot.message_handler(func=lambda message: True)
-def handle_answers(message):
-    try:
-        parts = message.text.strip().split(maxsplit=1)
-        test_id = parts[0]
-        user_answers = parts[1].strip().upper()
-
-        correct_answers = test_answers.get(test_id)
-        if not correct_answers:
-            bot.reply_to(message, f"{test_id} testi topilmadi.")
-            return
-
-        score = sum(1 for a, b in zip(user_answers, correct_answers) if a == b)
-        total = len(correct_answers)
-        bot.reply_to(message, f"✅ Natija: {score}/{total} ta to‘g‘ri.")
-
-    except Exception as e:
-        bot.reply_to(message, "❌ Noto‘g‘ri format. Masalan: test1 ABCDCABDA...")
-
-bot.polling()
+    app.run_polling()
